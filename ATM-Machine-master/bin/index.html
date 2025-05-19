@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Advanced ATM Simulator - Enhanced</title>
+  <style>
+    /* Same styles as before with minor improvements */
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      transition: background 0.3s;
+    }
+    .dark-mode {
+      background: #1e1e1e;
+      color: white;
+    }
+    .atm-container {
+      background: #fff;
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+      width: 350px;
+      text-align: center;
+      transition: background 0.3s, color 0.3s;
+      position: relative;
+    }
+    .dark-mode .atm-container {
+      background: #2c2c2c;
+      color: white;
+    }
+    input, button, select {
+      width: 90%;
+      margin: 8px 0;
+      padding: 10px;
+      font-size: 14px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #log {
+      text-align: left;
+      font-size: 12px;
+      max-height: 120px;
+      overflow-y: auto;
+      margin-top: 10px;
+      padding: 5px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      background: #f9f9f9;
+    }
+    .dark-mode #log {
+      background: #3c3c3c;
+    }
+    .toggle-theme {
+      background: transparent;
+      border: none;
+      font-size: 18px;
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      cursor: pointer;
+      color: #007bff;
+    }
+    #transaction-history {
+      margin-top: 10px;
+      max-height: 150px;
+      overflow-y: auto;
+      background: #e9ecef;
+      padding: 8px;
+      border-radius: 8px;
+      font-size: 12px;
+      text-align: left;
+    }
+    .dark-mode #transaction-history {
+      background: #444;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <button class="toggle-theme" onclick="toggleTheme()">🌓</button>
+
+  <div class="atm-container">
+    <h2>ATM Simulator</h2>
+
+    <div id="login-section">
+      <input type="text" id="customer-number" placeholder="Customer Number" />
+      <input type="password" id="pin-number" placeholder="PIN" />
+      <button onclick="login()">Login</button>
+      <p id="login-error" style="color: red; font-size: 13px;"></p>
+    </div>
+
+    <div id="menu-section" style="display: none;">
+      <h3>Welcome, <span id="user-id"></span>!</h3>
+      <button onclick="selectAccount('checking')">Checking Account</button>
+      <button onclick="selectAccount('saving')">Saving Account</button>
+      <button onclick="logout()">Logout</button>
+    </div>
+
+    <div id="account-section" style="display: none;">
+      <h3 id="account-title">Account</h3>
+      <p>Balance: ₹<span id="balance">0.00</span></p>
+      <input type="number" id="amount" placeholder="Enter amount" />
+      <div class="buttons">
+        <button onclick="deposit()">Deposit</button>
+        <button onclick="withdraw()">Withdraw</button>
+        <button onclick="transfer()">Transfer</button>
+        <button onclick="back()">Back</button>
+      </div>
+      <div id="log"></div>
+      <h4>Transaction History</h4>
+      <div id="transaction-history"></div>
+    </div>
+  </div>
+
+  <script>
+    // Predefined users with balances, saved to localStorage for persistence
+    const initialUsers = {
+      12345: { pin: '1234', checking: 1000, saving: 5000, transactions: [] },
+      54321: { pin: '4321', checking: 2000, saving: 3000, transactions: [] }
+    };
+
+    // Load users from localStorage or initialize
+    let users = JSON.parse(localStorage.getItem('atmUsers')) || initialUsers;
+
+    let currentUserKey = null;
+    let currentUser = null;
+    let currentAccount = 'checking';
+    let failedAttempts = 0;
+    const MAX_ATTEMPTS = 3;
+
+    function saveUsers() {
+      localStorage.setItem('atmUsers', JSON.stringify(users));
+    }
+
+    function login() {
+      const customer = document.getElementById('customer-number').value.trim();
+      const pin = document.getElementById('pin-number').value.trim();
+      const errorP = document.getElementById('login-error');
+      errorP.textContent = '';
+
+      if (!customer || !pin) {
+        errorP.textContent = 'Please enter customer number and PIN.';
+        return;
+      }
+
+      if (users[customer] && users[customer].pin === pin) {
+        currentUserKey = customer;
+        currentUser = users[customer];
+        failedAttempts = 0;
+
+        document.getElementById('login-section').style.display = 'none';
+        document.getElementById('menu-section').style.display = 'block';
+        document.getElementById('user-id').innerText = currentUserKey;
+        clearLog();
+      } else {
+        failedAttempts++;
+        if (failedAttempts >= MAX_ATTEMPTS) {
+          alert("Too many failed attempts. Account temporarily locked.");
+          disableLogin();
+        } else {
+          errorP.textContent = "Invalid credentials!";
+        }
+      }
+    }
+
+    function disableLogin() {
+      document.getElementById('login-section').innerHTML = `<p style="color: red;">Account locked. Please refresh page.</p>`;
+    }
+
+    function selectAccount(account) {
+      currentAccount = account;
+      document.getElementById('menu-section').style.display = 'none';
+      document.getElementById('account-section').style.display = 'block';
+      document.getElementById('account-title').innerText = account.charAt(0).toUpperCase() + account.slice(1) + " Account";
+      updateBalance();
+      clearLog();
+      renderTransactionHistory();
+    }
+
+    function updateBalance() {
+      document.getElementById('balance').innerText = currentUser[currentAccount].toFixed(2);
+    }
+
+    function deposit() {
+      const amount = parseFloat(document.getElementById('amount').value);
+      if (!isNaN(amount) && amount > 0) {
+        currentUser[currentAccount] += amount;
+        log(`Deposited ₹${amount.toFixed(2)}`);
+        addTransaction('Deposit', currentAccount, amount);
+        updateBalance();
+        saveUsers();
+      } else {
+        alert("Enter valid amount");
+      }
+    }
+
+    function withdraw() {
+      const amount = parseFloat(document.getElementById('amount').value);
+      if (!isNaN(amount) && amount > 0) {
+        if (currentUser[currentAccount] >= amount) {
+          currentUser[currentAccount] -= amount;
+          log(`Withdrew ₹${amount.toFixed(2)}`);
+          addTransaction('Withdraw', currentAccount, amount);
+          updateBalance();
+          saveUsers();
+          if (currentUser[currentAccount] < 100) {
+            alert("Warning: Low balance!");
+          }
+        } else {
+          alert("Insufficient funds.");
+        }
+      } else {
+        alert("Enter valid amount");
+      }
+    }
+
+    function transfer() {
+      const amount = parseFloat(document.getElementById('amount').value);
+      const other = currentAccount === 'checking' ? 'saving' : 'checking';
+      if (!isNaN(amount) && amount > 0 && currentUser[currentAccount] >= amount) {
+        currentUser[currentAccount] -= amount;
+        currentUser[other] += amount;
+        log(`Transferred ₹${amount.toFixed(2)} to ${other}`);
+        addTransaction('Transfer Out', currentAccount, amount);
+        addTransaction('Transfer In', other, amount);
+        updateBalance();
+        saveUsers();
+      } else {
+        alert("Invalid or insufficient funds.");
+      }
+    }
+
+    function addTransaction(type, account, amount) {
+      const transaction = {
+        type,
+        account,
+        amount,
+        date: new Date().toLocaleString()
+      };
+      currentUser.transactions.push(transaction);
+      renderTransactionHistory();
+    }
+
+    function renderTransactionHistory() {
+      const historyDiv = document.getElementById('transaction-history');
+      historyDiv.innerHTML = '';
+
+      // Show last 10 transactions for current account
+      const filtered = currentUser.transactions
+        .filter(txn => txn.account === currentAccount)
+        .slice(-10)
+        .reverse();
+
+      if (filtered.length === 0) {
+        historyDiv.innerHTML = '<i>No transactions yet.</i>';
+        return;
+      }
+
+      filtered.forEach(txn => {
+        const color = txn.type.includes('Out') || txn.type === 'Withdraw' ? 'red' : 'green';
+        const line = `<div style="color:${color}; margin-bottom:4px;">
+          <strong>${txn.type}</strong> ₹${txn.amount.toFixed(2)} <br />
+          <small>${txn.date}</small>
+        </div>`;
+        historyDiv.innerHTML += line;
+      });
+    }
+
+    function back() {
+      document.getElementById('account-section').style.display = 'none';
+      document.getElementById('menu-section').style.display = 'block';
+      document.getElementById('amount').value = '';
+      clearLog();
+    }
+
+    function logout() {
+      currentUserKey = null;
+      currentUser = null;
+      document.getElementById('menu-section').style.display = 'none';
+      document.getElementById('account-section').style.display = 'none';
+      document.getElementById('login-section').style.display = 'block';
+      document.getElementById('customer-number').value = '';
+      document.getElementById('pin-number').value = '';
+      document.getElementById('login-error').textContent = '';
+    }
+
+    function log(message) {
+      const logBox = document.getElementById('log');
+      const time = new Date().toLocaleTimeString();
+      logBox.innerHTML += `[${time}] ${message}<br>`;
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function clearLog() {
+      document.getElementById('log').innerHTML = '';
+    }
+
+    function toggleTheme() {
+      document.body.classList.toggle('dark-mode');
+    }
+  </script>
+</body>
+</html>
